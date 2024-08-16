@@ -9,6 +9,8 @@ import {
   getPending,
   getUpdatedLobbies,
   updateWinners,
+  exitLobby,
+  updateLobby
 } from "../controllers/lobbyController.js";
 import { verifyJwtToken } from "../middleware/verify.js";
 
@@ -18,8 +20,10 @@ router.post("/", verifyJwtToken, createLobby);
 router.put("/enter/:lobbyid", verifyJwtToken, enterLobby);
 router.get("/getactive", verifyJwtToken, getActiveLobbies);
 router.get("/getpending", verifyJwtToken, getPending);
-router.put("/update/:lobbyid", verifyJwtToken, updateWinners);
+router.put("/updateWinners/:lobbyid", verifyJwtToken, updateWinners);
+router.put("/update/:lobbyid", verifyJwtToken, updateLobby);
 router.get("/getupdated", verifyJwtToken, getUpdatedLobbies);
 router.get("/lobbyusers/:lobbyid", verifyJwtToken, getAllLobbyUsers);
+router.put("/exit", verifyJwtToken, exitLobby);
 
 export default router;

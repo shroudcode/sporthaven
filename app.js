@@ -5,8 +5,8 @@ import sequelize from "./config/db.config.js";
 import User from "./models/User.js"; // Ensure you import all models
 import express from "express";
 import cookieParser from "cookie-parser";
-import userRoutes from "./routes/user.routes.js";
-import lobbyRoutes from "./routes/lobby.routes.js";
+import userRoutes from "./routes/userRoutes.js";
+import lobbyRoutes from "./routes/lobbyRoutes.js";
 import sportRoutes from "./routes/sportRoutes.js";
 import mysql from "mysql2";
 import dotenv from "dotenv";

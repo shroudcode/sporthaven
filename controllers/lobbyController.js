@@ -66,7 +66,7 @@
 // controllers/lobbyController.js
 
 import db from "../models/index.js";
-const { Lobby, LobbyUserIds, Sport, User } = db;
+const { Lobby, LobbyUserIds, Sport, User, LobbyWinners } = db;
 
 export const createLobby = async (req, res, next) => {
   try {
@@ -242,10 +242,11 @@ export const getPending = async (req, res, next) => {
   }
 };
 
+
 export const updateWinners = async (req, res, next) => {
   try {
     const { lobbyid } = req.params;
-    const { winner, score } = req.body;
+    const { userids, winner_comments, score } = req.body;
 
     // Find the lobby by lobbyid
     const lobby = await Lobby.findByPk(lobbyid);
@@ -254,25 +255,44 @@ export const updateWinners = async (req, res, next) => {
       return res.status(404).json({ message: "Lobby not found" });
     }
 
-    // Check if the lobby is inactive
+    // Check if the lobby is active
     if (lobby.isactive) {
       return res.status(400).json({ message: "Lobby is still active" });
     }
 
     // Check if the lobby has already been updated
     if (lobby.isupdated) {
-      return res
-        .status(400)
-        .json({ message: "Lobby has already been updated" });
+      return res.status(400).json({ message: "Lobby has already been updated" });
     }
 
-    // Update the winner and score values
-    lobby.winner = winner;
+    // Check if all userids belong to the lobby (in lobby_userids table)
+    const userIdsInLobby = await LobbyUserIds.findAll({
+      where: {
+        lobbyid: lobby.lobbyid,
+        userid: userids
+      }
+    });
+
+    // Check if all provided userids are valid participants of the lobby
+    if (userIdsInLobby.length !== userids.length) {
+      return res.status(400).json({ message: "One or more winners do not belong to the lobby" });
+    }
+
+    // Update the winner comments and score values in the lobby
+    lobby.winner = winner_comments;
     lobby.score = score;
     lobby.isupdated = true;
 
     // Save the updated lobby
     await lobby.save();
+
+    // Create entries in lobby_winners table for each userid
+    for (const userid of userids) {
+      await LobbyWinners.create({
+        lobbyid: lobby.lobbyid,
+        userid: userid
+      });
+    }
 
     res.status(200).json(lobby);
   } catch (error) {
@@ -280,6 +300,46 @@ export const updateWinners = async (req, res, next) => {
     next(error); // Pass any errors to the error handling middleware
   }
 };
+
+
+// export const updateWinners = async (req, res, next) => {
+//   try {
+//     const { lobbyid } = req.params;
+//     const { winner, score } = req.body;
+
+//     // Find the lobby by lobbyid
+//     const lobby = await Lobby.findByPk(lobbyid);
+
+//     if (!lobby) {
+//       return res.status(404).json({ message: "Lobby not found" });
+//     }
+
+//     // Check if the lobby is inactive
+//     if (lobby.isactive) {
+//       return res.status(400).json({ message: "Lobby is still active" });
+//     }
+
+//     // Check if the lobby has already been updated
+//     if (lobby.isupdated) {
+//       return res
+//         .status(400)
+//         .json({ message: "Lobby has already been updated" });
+//     }
+
+//     // Update the winner and score values
+//     lobby.winner = winner;
+//     lobby.score = score;
+//     lobby.isupdated = true;
+
+//     // Save the updated lobby
+//     await lobby.save();
+
+//     res.status(200).json(lobby);
+//   } catch (error) {
+//     console.error("Error updating lobby winner and score:", error);
+//     next(error); // Pass any errors to the error handling middleware
+//   }
+// };
 
 export const getUpdatedLobbies = async (req, res, next) => {
   try {
@@ -319,3 +379,105 @@ export const getAllLobbyUsers = async (req, res, next) => {
     next(error);
   }
 };
+
+
+export const exitLobby = async (req, res, next) => {
+  try {
+    const userId = req.user.id; // Assuming user ID is available in req.user
+    const user = await User.findByPk(userId);
+
+    // Check if the user is in a lobby
+    if (!user || !user.activelobby) {
+      return res.status(400).json({ message: "User is not in a lobby" });
+    }
+
+    const lobbyId = user.currentlobby;
+    const lobby = await Lobby.findByPk(lobbyId);
+
+    if (!lobby) {
+      return res.status(404).json({ message: "Lobby not found" });
+    }
+
+    // Remove the user from the lobby_userids table
+    await LobbyUserIds.destroy({
+      where: { lobbyid: lobbyId, userid: userId }
+    });
+
+    // Update the lobby's size
+    lobby.currentsize -= 1;
+
+    // Update the lobby's isactive status if necessary
+    if (lobby.currentsize < lobby.maxsize) {
+      lobby.isactive = true;
+    }
+
+    await lobby.save();
+
+    // Update the sport's current size
+    const sport = await Sport.findByPk(lobby.sportid);
+    if (sport) {
+      sport.currentsize -= 1;
+      await sport.save();
+    }
+
+    // Update the user's activelobby and currentlobby fields
+    user.activelobby = false;
+    user.currentlobby = null;
+    await user.save();
+
+    res.status(200).json({ message: "User exited the lobby successfully" });
+  } catch (error) {
+    console.error("Error exiting lobby:", error);
+    next(error); // Pass any errors to the error handling middleware
+  }
+};
+
+
+export const updateLobby = async (req, res, next) => {
+  try {
+    const { lobbyid } = req.params;
+    const { isactive, ...updateData } = req.body;
+    const userId = req.user.id; // Assuming user ID is available in req.user
+
+    // Find the lobby by lobbyid
+    const lobby = await Lobby.findByPk(lobbyid);
+
+    if (!lobby) {
+      return res.status(404).json({ message: "Lobby not found" });
+    }
+
+    // Get all users associated with the lobby and find the original creator
+    const lobbyUsers = await LobbyUserIds.findAll({
+      where: { lobbyid },
+      order: [['id', 'ASC']] // Order by primary key to find the original creator
+    });
+
+    if (lobbyUsers.length === 0) {
+      return res.status(404).json({ message: "No users found in the lobby" });
+    }
+
+    const originalCreatorId = lobbyUsers[0].userid;
+
+    // Check if the current user is the original creator
+    if (userId !== originalCreatorId) {
+      return res.status(403).json({ message: "User is not the original creator of the lobby" });
+    }
+
+    // Update the lobby's isactive status and other fields if provided
+    if (isactive !== undefined) {
+      lobby.isactive = isactive;
+    }
+
+    for (const [key, value] of Object.entries(updateData)) {
+      lobby[key] = value;
+    }
+
+    await lobby.save();
+
+    res.status(200).json({ message: "Lobby updated successfully", lobby });
+  } catch (error) {
+    console.error("Error updating lobby:", error);
+    next(error); // Pass any errors to the error handling middleware
+  }
+};
+

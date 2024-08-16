@@ -1,9 +1,9 @@
-// models/LobbyUserIds.js
+// models/LobbyWinners.js
 
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/db.config.js'; // Adjust the path as needed
 
-const LobbyUserIds = sequelize.define('LobbyUserIds', {
+const LobbyWinners = sequelize.define('LobbyWinners', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
@@ -13,7 +13,7 @@ const LobbyUserIds = sequelize.define('LobbyUserIds', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Lobby', // Reference to the Lobby model
+      model: 'lobby', // Reference to the Lobby model
       key: 'lobbyid',
     },
     onDelete: 'CASCADE',
@@ -28,8 +28,8 @@ const LobbyUserIds = sequelize.define('LobbyUserIds', {
     onDelete: 'CASCADE',
   },
 }, {
-  tableName: 'lobby_userids', // Name of the table in the database
+  tableName: 'lobby_winners', // Name of the table in the database
   timestamps: false, // Disable createdAt and updatedAt columns
 });
 
-export default LobbyUserIds; 
+export default LobbyWinners;
